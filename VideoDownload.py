@@ -29,6 +29,7 @@ def resolver(request, string):
         string = string.replace(" ", "")
         string = string.replace("。", "")
         string = string.replace("/", "")
+        print(string)
         return string
     elif request == 5:
         # 提取BV号
@@ -77,6 +78,7 @@ def storage(Byte):
         return "%.2fGB" % GB
 
 def download(vid_name, desc, stream_url, vid_size):
+    os.system("cls")
     url = stream_url
     video_dw = requests.get(url=url, headers=settings.HEADERS, stream=True)
     current_size = 0
@@ -172,9 +174,10 @@ class Video(object):
         self.get_vid_stream()
         download(vid_name, desc, self.stream_url, self.vid_size)
 
-class ListVideo(object):
-    def __init__(self):
-        pass
+class ListVideo(Video):
+    def __init__(self, vid_url):
+        self.vid_url = vid_url
+
 
 def start():
     os.system("cls")
@@ -187,13 +190,13 @@ def start():
     """)
     type = int(input("请输入视频类型："))
     # vid_url = input("请输入网址：")
-    vid_url = "https://www.bilibili.com/video/BV1Bs411Y78b?from=search&seid=16768352237849981157&spm_id_from=333.337.0.0"
+    vid_url = "https://www.bilibili.com/video/BV1Qi4y1R7tW"
     if type == 1:
         Video(vid_url).start()
     elif type == 2:
         Movie(vid_url).start()
     elif type == 3:
-        pass
+        ListVideo(vid_url).start()
     elif type == 4:
         pass
     

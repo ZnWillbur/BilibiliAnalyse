@@ -13,7 +13,7 @@ def resolver(request, string):
         # 电影网址去参数
         return string.rsplit("?", 1)[0]
     elif request == 2:
-        # 解析视频的avid和cvid
+        # 解析电影的avid和cvid
         id_info = re.search('"epList":\[(.*?)\]', string, re.S)
         avid = re.findall('"aid":(\d+)', id_info.group(1))[0]
         cvid = re.findall('"cid":(\d+)', id_info.group(1))[0]
@@ -41,7 +41,7 @@ def resolver(request, string):
             vid_list.append([part, cid])
         return vid_list
     elif request == 7:
-        # 获取所有播放链接,和简介
+        # 获取番剧的所有aid、cid、标题和简介
         vid_list = []
         for part in string["result"]["episodes"]:
             aid, cid, title = part["aid"], part["cid"], part["share_copy"]
@@ -66,6 +66,7 @@ def get_qn():
     return int(input("请输入清晰度(键)："))
 
 def storage_unit(Byte):
+    """速度进制转换"""
     if Byte < 1024:
         return "%.2fB/s" % Byte
     elif 1024 <= Byte < 1024 ** 2:
@@ -79,6 +80,7 @@ def storage_unit(Byte):
         return "%.2fGB/s" % GB
 
 def storage(Byte):
+    """进制转换"""
     if Byte < 1024:
         return "%.2fB" % Byte
     elif 1024 <= Byte < 1024 ** 2:
@@ -92,17 +94,21 @@ def storage(Byte):
         return "%.2fGB" % GB
 
 def download(vid_name, desc, stream_url, vid_size):
+    """下载器"""
     os.system("cls")
+    # 初始化
     url = stream_url
-    video_dw = requests.get(url=url, headers=settings.HEADERS, stream=True)
     current_size = 0
     vid_name = resolver(4, string=vid_name)
+    # 获取视频流
+    video_dw = requests.get(url=url, headers=settings.HEADERS, stream=True)
     with open(fr"{vid_name}.flv", "wb") as f:
         total = 0
         start_time = time.time()
         try:
             print(f"正在下载...{vid_name}\n")
             print(f"简介：{desc}\n")
+            # 分段写入
             for chunk in video_dw.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
@@ -113,6 +119,7 @@ def download(vid_name, desc, stream_url, vid_size):
                     speed = (1024 * total) / \
                         math.ceil(time.time() - start_time + 0.001)
                     done = int(math.ceil(20 * current_size / vid_size))
+                    # 进度条
                     print("[{}{}], 已下载{}, 总共{}, 速度{}    ".format(
                         "#" * done, " " * (20-done),
                         storage(current_size), storage(vid_size),
@@ -122,13 +129,14 @@ def download(vid_name, desc, stream_url, vid_size):
             print("网络不稳定，建议换一个清晰度!")
 
 class Movie(object):
-
+    """电影的下载"""
     def __init__(self, vid_url):
         self.vid_url = vid_url
         self.stream_url = None
         self.vid_size = None
 
     def get_movie_data(self):
+        # 获取电影的avid和cvid
         requests.get(url=self.vid_url, headers=settings.HEADERS)
         resp = requests.get(url=self.vid_url, headers=settings.HEADERS)
         return resolver(2, resp.text)
@@ -137,10 +145,12 @@ class Movie(object):
         url = "http://api.bilibili.com/x/web-interface/view"
         avid, cvid = self.get_movie_data()
         resp = requests.get(url=url, headers=settings.HEADERS, params={"aid":avid})
+        # 获取名字和简介
         vid_name, desc = resolver(3, resp.json())
         return [avid, cvid, vid_name, desc]
 
     def get_movie(self, avid, cvid, qn):
+        # 获取视频流地址
         url = "https://api.bilibili.com/pgc/player/web/playurl"
         params = {
             "aid": avid,

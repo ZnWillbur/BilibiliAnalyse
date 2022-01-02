@@ -1,9 +1,12 @@
+import os
 import VideoDownload
-import loggin
+import settings
 
 def start():
-    print("请扫码登录，此过程不要使用系统代理！")
-    loggin.loggin()
+    cookie = input("请输入您的cookie:")
+    settings.HEADERS["cookie"] = cookie
+    
+    os.system("cls")
     print("""
     欢迎使用Bilibili网站分析器
     该软件由ZnWillbur提供！

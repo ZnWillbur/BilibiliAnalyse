@@ -3,6 +3,7 @@ import qrcode
 import cv2
 from threading import Thread
 import time
+import os
 
 import settings
 
@@ -15,7 +16,27 @@ def show():
     time.sleep(180)
     cv2.destroyAllWindows()
 
+def ifLogin():
+    if not os.path.exists("sessdata.log"):
+        open("sessdata.log", "w", encoding="utf8")
+        return
+        
+    with open("sessdata.log", "r+", encoding="utf8") as f:
+        line_list = f.readlines()
+        for line in line_list:
+            if time.time() - line.split(",")[0] <= 20 * 60:
+                return line.split(",")[1]
+            else:
+                line_list.pop(0)
+
+
 def loggin():
+    # 验证是否登录
+    data = ifLogin()
+    if data:
+        settings.HEADERS["cookie"] = data
+        return
+
     # 获取登录url
     url = "http://passport.bilibili.com/qrcode/getLoginUrl"
     resp = requests.get(url=url, headers=settings.HEADERS)
@@ -38,8 +59,10 @@ def loggin():
         resp = requests.post(url=url, headers=settings.HEADERS, params={"oauthKey": key})
         if not isinstance(resp.json()["data"], int):
             print(resp.json())
-            SESSDATA = resp.json()["data"]["url"].rsplit("&")[-3].rsplit("=")[-1]
-            settings.HEADERS["cookie": str(SESSDATA)]
+            url = resp.json()["data"]["url"]
+            SESSDATA = url.split("&")[3].split("=")[-1]
+            settings.HEADERS["cookie"] = SESSDATA
+            with open("sessdata.log", "a", encoding="utf8") as f:
+                f.write(f"{time.time()},{SESSDATA}")
             break
-        time.sleep(3)
-
+        time.sleep(5)

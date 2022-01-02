@@ -5,7 +5,7 @@ def start():
     print("请扫码登录，此过程不要使用系统代理！")
     loggin.loggin()
     print("""
-    欢迎使用Bilibili网站分析器v1.0
+    欢迎使用Bilibili网站分析器
     该软件由ZnWillbur提供！
 
     分析器有如下功能：

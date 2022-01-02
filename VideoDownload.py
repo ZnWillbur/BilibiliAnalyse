@@ -29,11 +29,19 @@ def resolver(request, string):
         string = string.replace(" ", "")
         string = string.replace("。", "")
         string = string.replace("/", "")
-        print(string)
+        string = string.replace("|", "")
         return string
     elif request == 5:
         # 提取BV号
         return string.rsplit("?", 1)[0].rsplit("/", 1)[1]
+    elif request == 6:
+        # 获取多次cid
+        vid_list = []
+        for page in string["data"]["pages"]:
+            cid, part = page["cid"], page["part"]
+            vid_list.append([part, cid])
+        return vid_list
+        
 
 def get_qn():
     os.system("cls")
@@ -151,18 +159,27 @@ class Video(object):
         self.stream_url = None
         self.vid_size = None
     
-    def get_vid_info(self):
+    def get_vid_info(self, flag=0):
         url = "http://api.bilibili.com/x/web-interface/view"
         resp = requests.get(url=url, headers=settings.HEADERS, params={"bvid":self.bvid})
-        self.cid = resp.json()["data"]["cid"]
-        return resolver(3, resp.json())
+        if flag == 1:
+            self.cid = resp.json()["data"]["cid"]
+            return resolver(3, resp.json())
+        elif flag == 2:
+            vid_name, desc = resolver(3, resp.json())
+            vid_list = resolver(6, resp.json())
+            return vid_name, desc, vid_list
+        else:
+            self.cid = resp.json()["data"]["cid"]
+            vid_name, desc = resolver(3, resp.json())
+            return (vid_name, desc, resp.json()["data"]["videos"])
     
-    def get_vid_stream(self):
+    def get_vid_stream(self, qn=0):
         url = "http://api.bilibili.com/x/player/playurl"
         resp = requests.get(url=url, headers=settings.HEADERS, params={
             "bvid": self.bvid,
             "cid" : self.cid,
-            "qn" : get_qn()
+            "qn" : qn if qn else get_qn()
         })
         self.stream_url = resp.json()["data"]["durl"][0]["url"]
         self.vid_size = resp.json()["data"]["durl"][0]["size"]
@@ -170,13 +187,39 @@ class Video(object):
 
     def start(self):
         self.bvid = resolver(5, self.vid_url)
-        vid_name, desc = self.get_vid_info()
+        vid_name, desc = self.get_vid_info(1)
         self.get_vid_stream()
         download(vid_name, desc, self.stream_url, self.vid_size)
 
 class ListVideo(Video):
     def __init__(self, vid_url):
+        self.vid_list = None
+        super().__init__(vid_url)
+
+    def loop(self):
+        qn = get_qn()
+        for part in self.vid_list:
+            self.cid = part[1]
+            self.get_vid_stream(qn)
+            part.append(self.vid_size)
+            part.append(self.stream_url)
+        
+        for part in self.vid_list:
+            download(part[0], self.desc, part[3], part[2])
+        
+
+    def start(self):
+        self.bvid = resolver(5, self.vid_url)
+        vid_name, self.desc, self.vid_list = self.get_vid_info(2)
+        print(f"正在下载...{vid_name}")
+        self.loop()
+
+class Drama(Movie):
+    def __init__(self, vid_url):
         self.vid_url = vid_url
+    
+    def start(self):
+        pass
 
 
 def start():
@@ -185,8 +228,8 @@ def start():
     视频类型：
     1.普通视频
     2.电影
-    3.番剧(开发中)
-    4.分p视频(不支持)
+    3.番剧(不支持)
+    4.分p视频(开发中)
     """)
     type = int(input("请输入视频类型："))
     # vid_url = input("请输入网址：")
@@ -196,9 +239,9 @@ def start():
     elif type == 2:
         Movie(vid_url).start()
     elif type == 3:
-        ListVideo(vid_url).start()
+        Drama(vid_url).start()
     elif type == 4:
-        pass
+        ListVideo(vid_url).start()
     
     
 start()

@@ -41,6 +41,13 @@ def resolver(request, string):
             cid, part = page["cid"], page["part"]
             vid_list.append([part, cid])
         return vid_list
+    elif request == 7:
+        # 获取所有播放链接,和简介
+        vid_list = []
+        for part in string["result"]["episodes"]:
+            aid, cid, title = part["aid"], part["cid"], part["share_copy"]
+            vid_list.append([aid, cid, title])
+        return vid_list, string["result"]["evaluate"]
         
 
 def get_qn():
@@ -217,9 +224,30 @@ class ListVideo(Video):
 class Drama(Movie):
     def __init__(self, vid_url):
         self.vid_url = vid_url
+        self.vid_list = None
+        self.desc = None
     
+    def get_all_link(self):
+        url = "https://api.bilibili.com/pgc/view/web/season"
+        ep_id = self.vid_url.rsplit("ep", 1)[1]
+        resp = requests.get(url=url,headers=settings.HEADERS, params={"ep_id":ep_id})
+        # with open("a.json", "w", encoding="utf8") as f:
+        #     f.write(resp.text)
+        self.vid_list,self.desc = resolver(7, resp.json())
+
+    def loop(self):
+        qn = get_qn()
+        for part in self.vid_list:
+            self.get_movie(part[0], part[1], qn)
+            part.append(self.stream_url)
+            part.append(self.vid_size)
+        for part in self.vid_list:
+            download(part[2], self.desc, part[3], part[4])
+
     def start(self):
-        pass
+        self.vid_url = resolver(1, self.vid_url)
+        self.get_all_link()
+        self.loop()
 
 
 def start():
@@ -228,8 +256,8 @@ def start():
     视频类型：
     1.普通视频
     2.电影
-    3.番剧(不支持)
-    4.分p视频(开发中)
+    3.番剧
+    4.分p视频
     """)
     type = int(input("请输入视频类型："))
     vid_url = input("请输入网址：")

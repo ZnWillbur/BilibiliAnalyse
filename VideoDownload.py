@@ -1,4 +1,3 @@
-from re import T
 import re
 import requests
 import time
@@ -231,8 +230,6 @@ class Drama(Movie):
         url = "https://api.bilibili.com/pgc/view/web/season"
         ep_id = self.vid_url.rsplit("ep", 1)[1]
         resp = requests.get(url=url,headers=settings.HEADERS, params={"ep_id":ep_id})
-        # with open("a.json", "w", encoding="utf8") as f:
-        #     f.write(resp.text)
         self.vid_list,self.desc = resolver(7, resp.json())
 
     def loop(self):

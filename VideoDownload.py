@@ -232,8 +232,7 @@ def start():
     4.分p视频(开发中)
     """)
     type = int(input("请输入视频类型："))
-    # vid_url = input("请输入网址：")
-    vid_url = "https://www.bilibili.com/video/BV1Qi4y1R7tW"
+    vid_url = input("请输入网址：")
     if type == 1:
         Video(vid_url).start()
     elif type == 2:

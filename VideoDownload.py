@@ -241,6 +241,3 @@ def start():
         Drama(vid_url).start()
     elif type == 4:
         ListVideo(vid_url).start()
-    
-    
-start()

@@ -47,7 +47,7 @@ def resolver(request, string):
             aid, cid, title = part["aid"], part["cid"], part["share_copy"]
             vid_list.append([aid, cid, title])
         return vid_list, string["result"]["evaluate"]
-        
+
 
 def get_qn():
     os.system("cls")
@@ -67,6 +67,7 @@ def get_qn():
     """)
     return int(input("请输入清晰度(键)："))
 
+
 def storage_unit(Byte):
     """速度进制转换"""
     if Byte < 1024:
@@ -81,6 +82,7 @@ def storage_unit(Byte):
         GB = Byte / (1024 ** 3)
         return "%.2fGB/s" % GB
 
+
 def storage(Byte):
     """进制转换"""
     if Byte < 1024:
@@ -94,6 +96,7 @@ def storage(Byte):
     else:
         GB = Byte / (1024 ** 3)
         return "%.2fGB" % GB
+
 
 def download(vid_name, desc, stream_url, vid_size):
     """下载器"""
@@ -130,8 +133,10 @@ def download(vid_name, desc, stream_url, vid_size):
             print(e)
             print("网络不稳定，建议换一个清晰度!")
 
+
 class Movie(object):
     """电影的下载"""
+
     def __init__(self, vid_url):
         self.vid_url = vid_url
         self.stream_url = None
@@ -146,7 +151,8 @@ class Movie(object):
     def get_movie_info(self):
         url = "http://api.bilibili.com/x/web-interface/view"
         avid, cvid = self.get_movie_data()
-        resp = requests.get(url=url, headers=settings.HEADERS, params={"aid":avid})
+        resp = requests.get(
+            url=url, headers=settings.HEADERS, params={"aid": avid})
         # 获取名字和简介
         vid_name, desc = resolver(3, resp.json())
         return [avid, cvid, vid_name, desc]
@@ -169,6 +175,7 @@ class Movie(object):
         self.get_movie(avid, cvid, get_qn())
         download(vid_name, desc, self.stream_url, self.vid_size)
 
+
 class Video(object):
     def __init__(self, vid_url):
         self.vid_url = vid_url
@@ -176,10 +183,11 @@ class Video(object):
         self.cid = None
         self.stream_url = None
         self.vid_size = None
-    
+
     def get_vid_info(self, flag=0):
         url = "http://api.bilibili.com/x/web-interface/view"
-        resp = requests.get(url=url, headers=settings.HEADERS, params={"bvid":self.bvid})
+        resp = requests.get(url=url, headers=settings.HEADERS,
+                            params={"bvid": self.bvid})
         if flag == 1:
             self.cid = resp.json()["data"]["cid"]
             return resolver(3, resp.json())
@@ -191,17 +199,16 @@ class Video(object):
             self.cid = resp.json()["data"]["cid"]
             vid_name, desc = resolver(3, resp.json())
             return (vid_name, desc, resp.json()["data"]["videos"])
-    
+
     def get_vid_stream(self, qn=0):
         url = "http://api.bilibili.com/x/player/playurl"
         resp = requests.get(url=url, headers=settings.HEADERS, params={
             "bvid": self.bvid,
-            "cid" : self.cid,
-            "qn" : qn if qn else get_qn()
+            "cid": self.cid,
+            "qn": qn if qn else get_qn()
         })
         self.stream_url = resp.json()["data"]["durl"][0]["url"]
         self.vid_size = resp.json()["data"]["durl"][0]["size"]
-
 
     def start(self):
         self.bvid = resolver(5, self.vid_url)
@@ -209,40 +216,71 @@ class Video(object):
         self.get_vid_stream()
         download(vid_name, desc, self.stream_url, self.vid_size)
 
+
 class ListVideo(Video):
     def __init__(self, vid_url):
         self.vid_list = None
         super().__init__(vid_url)
 
-    def loop(self):
+    def loop(self, flag=0, data=None):
         qn = get_qn()
         for part in self.vid_list:
             self.cid = part[1]
             self.get_vid_stream(qn)
             part.append(self.vid_size)
             part.append(self.stream_url)
-        
+
         for part in self.vid_list:
             download(part[0], self.desc, part[3], part[2])
-        
+
+    def ruleToDownload(self):
+        print("""
+        下载集数规则：
+        1-5   表示下载1到5集
+        -5    表示从第一集（从头）下载到第五集
+        5-    表示从第五集下载到最后
+        5     表示下载第五集
+        回车  表示下载所有
+        """)
+        flag = input("请输入规则：")
+        try:
+            if not flag:
+                return
+            elif flag.startswith("-"):
+                self.vid_list = self.vid_list[:int(flag.strip("-"))]
+            elif flag.endswith("-"):
+                self.vid_list = self.vid_list[int(flag.strip("-"))-1:]
+            elif flag.isdecimal():
+                self.vid_list = [self.vid_list[int(flag)-1]]
+            else:
+                nums = flag.split("-")[1]
+                self.vid_list = self.vid_list[int(nums[0])-1:int(nums[1])]
+        except Exception as e:
+            print(e)
+            print("请输入正确的规则！")
+            os.system("pause")
+            self.rule()
 
     def start(self):
         self.bvid = resolver(5, self.vid_url)
         vid_name, self.desc, self.vid_list = self.get_vid_info(2)
-        print(f"正在下载...{vid_name}")
+        self.ruleToDownload()
+        print(f"准备下载{vid_name}")
         self.loop()
+
 
 class Drama(Movie):
     def __init__(self, vid_url):
         self.vid_url = vid_url
         self.vid_list = None
         self.desc = None
-    
+
     def get_all_link(self):
         url = "https://api.bilibili.com/pgc/view/web/season"
         ep_id = self.vid_url.rsplit("ep", 1)[1]
-        resp = requests.get(url=url,headers=settings.HEADERS, params={"ep_id":ep_id})
-        self.vid_list,self.desc = resolver(7, resp.json())
+        resp = requests.get(url=url, headers=settings.HEADERS,
+                            params={"ep_id": ep_id})
+        self.vid_list, self.desc = resolver(7, resp.json())
 
     def loop(self):
         qn = get_qn()
@@ -266,7 +304,7 @@ def start():
     1.普通视频
     2.电影
     3.番剧
-    4.分p视频
+    4.分p视频(只要视频分P就要选这个)
     """)
     type = int(input("请输入视频类型："))
     vid_url = input("请输入网址：")

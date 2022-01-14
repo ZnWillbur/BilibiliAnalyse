@@ -222,7 +222,7 @@ class ListVideo(Video):
         self.vid_list = None
         super().__init__(vid_url)
 
-    def loop(self, flag=0, data=None):
+    def loop(self):
         qn = get_qn()
         for part in self.vid_list:
             self.cid = part[1]
@@ -234,13 +234,14 @@ class ListVideo(Video):
             download(part[0], self.desc, part[3], part[2])
 
     def ruleToDownload(self):
+        os.system("cls")
         print("""
-        下载集数规则：
-        1-5   表示下载1到5集
-        -5    表示从第一集（从头）下载到第五集
-        5-    表示从第五集下载到最后
-        5     表示下载第五集
-        回车  表示下载所有
+下载集数规则：
+1-5   表示下载1到5集
+-5    表示从第一集（从头）下载到第五集
+5-    表示从第五集下载到最后
+5     表示下载第五集
+回车  表示下载所有
         """)
         flag = input("请输入规则：")
         try:
@@ -253,7 +254,7 @@ class ListVideo(Video):
             elif flag.isdecimal():
                 self.vid_list = [self.vid_list[int(flag)-1]]
             else:
-                nums = flag.split("-")[1]
+                nums = flag.split("-")
                 self.vid_list = self.vid_list[int(nums[0])-1:int(nums[1])]
         except Exception as e:
             print(e)

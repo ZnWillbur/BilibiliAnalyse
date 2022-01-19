@@ -161,6 +161,7 @@ def download(file_name, desc, stream_url, vid_size):
     # 重置请求头
     if flag:
         settings.HEADERS.pop("Range")
+    start()
 
 
 class Movie(object):
@@ -390,3 +391,5 @@ def start():
         Drama(vid_url).start()
     elif type == 4:
         ListVideo(vid_url).start()
+    else:
+        return

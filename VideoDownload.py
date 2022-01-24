@@ -55,15 +55,15 @@ def resolver(request, string):
             vid_list.append([part, cid])
         return vid_list
     elif request == 7:
-        # 获取番剧的所有aid、cid、标题和简介
+        # 获取每集番剧的所有aid、cid、标题；并获取番剧简介和标题
         vid_list = []
         for part in string["result"]["episodes"]:
             aid, cid, title = part["aid"], part["cid"], part["share_copy"]
             vid_list.append([aid, cid, title])
-        return vid_list, string["result"]["evaluate"]
+        return vid_list, string["result"]["evaluate"], string["result"]["season_title"]
     elif request == 8:
         # 番剧网址去参数
-        return string.rsplit("/", 1)[0]
+        return string.rsplit("?", 1)[0]
 
 
 def get_qn():
@@ -118,6 +118,7 @@ def storage(Byte):
 def download(file_name, desc, stream_url, vid_size):
     """下载器"""
     os.system("cls")
+    print(file_name)
     # 初始化
     url = stream_url
     current_size = 0
@@ -161,7 +162,6 @@ def download(file_name, desc, stream_url, vid_size):
     # 重置请求头
     if flag:
         settings.HEADERS.pop("Range")
-    start()
 
 
 class Movie(object):
@@ -173,6 +173,7 @@ class Movie(object):
         self.vid_size = None
         self.file_name = None
         self.desc = None
+        self.dir_name = None
 
     def get_movie_data(self):
         # 获取电影的avid和cvid
@@ -226,7 +227,9 @@ class Drama(Movie):
         season_id = self.vid_url.rsplit("ss", 1)[1]
         resp = requests.get(url=url, headers=settings.HEADERS,
                             params={"season_id": season_id})
-        self.vid_list, self.desc = resolver(7, resp.json())
+        with open("a.json","w", encoding="utf8") as f:
+            f.write(resp.text)
+        self.vid_list, self.desc, self.dir_name = resolver(7, resp.json())
 
     def ruleToDownload(self):
         print("""
@@ -260,13 +263,18 @@ class Drama(Movie):
         qn = get_qn()
         for part in self.vid_list:
             self.file_name = os.path.join(
-                settings.DownloadDefaultPath, f"{part[2]}-{definition[qn]}.flv")
+                settings.DownloadDefaultPath, self.dir_name, f"{part[2]}-{definition[qn]}.flv")
             self.file_name = resolver(4, self.file_name)
             self.get_movie(part[0], part[1], qn)
 
     def start(self):
         self.vid_url = resolver(8, self.vid_url)
         self.get_all_link()
+        # 创建专门存放该番剧的文件夹
+        self.dir_name = resolver(4, self.dir_name)
+        path = os.path.join(settings.DownloadDefaultPath, self.dir_name)
+        if not os.path.exists(path):
+            os.mkdir(path)
         self.ruleToDownload()
         self.loop()
 
@@ -280,6 +288,7 @@ class Video(object):
         self.vid_size = None
         self.file_name = None
         self.desc = None
+        self.dir_name = None
 
     def get_vid_info(self, flag=0):
         url = "http://api.bilibili.com/x/web-interface/view"
@@ -332,7 +341,7 @@ class ListVideo(Video):
         qn = definition[qn_key]
         for part in self.vid_list:
             self.file_name = os.path.join(
-                settings.DownloadDefaultPath, f"{part[0]}-{qn}.flv")
+                settings.DownloadDefaultPath, self.dir_name, f"{part[0]}-{qn}.flv")
             self.file_name = resolver(4, self.file_name)
             self.cid = part[1]
             self.get_vid(qn_key)
@@ -367,7 +376,12 @@ class ListVideo(Video):
 
     def start(self):
         self.bvid = resolver(5, self.vid_url)
-        self.desc, self.vid_list = self.get_vid_info(2)
+        self.dir_name, self.desc, self.vid_list = self.get_vid_info(2)
+        # 创建专门存放该番剧的文件夹
+        self.dir_name = resolver(4, self.dir_name)
+        path = os.path.join(settings.DownloadDefaultPath, self.dir_name)
+        if not os.path.exists(path):
+            os.mkdir(path)
         self.ruleToDownload()
         self.loop()
 

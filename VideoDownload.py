@@ -3,9 +3,11 @@ import requests
 import time
 import math
 import os
+from threading import Thread
 
 import settings
 
+#清晰度字典
 definition = {
     127: '8K超高清',
     126: '杜比视界',
@@ -19,6 +21,10 @@ definition = {
     32: '480P清晰',
     16: '320P流畅'
 }
+# 线程对象列表
+t_lis = list()
+# 所有视频的大小的列表
+vids_sizes = list()
 
 
 def resolver(request, string):
@@ -115,10 +121,41 @@ def storage(Byte):
         return "%.2fGB" % GB
 
 
+def bar(dir_name, desc, vid_num):
+    while True:
+        print(f"正在生成线程中...已生成{len(vids_sizes)}/{vid_num}个线程...", end="\r")
+        if vid_num == len(vids_sizes):
+            vid_size = sum(vids_sizes)
+            break
+    os.system("cls")
+    print(f"正在下载...{dir_name}\n")
+    print(f"简介:{desc}\n")
+    # 初始化
+    start_time = time.time()
+    current_size = 0
+    file_name = os.path.join(settings.DownloadDefaultPath, dir_name)
+
+    # 进度条
+    while True:
+        current_size = 0
+        # 获取信息
+        for root, folder, files in os.walk(file_name):
+            current_size += sum([os.path.getsize(os.path.join(root, file))
+                                for file in files])
+        speed = math.ceil(current_size / (time.time() - start_time + 0.001))
+        done = int(math.ceil(40 * current_size / vid_size))
+        # 如果饱和，则退出
+        if current_size >= vid_size:
+            break
+        print("[{}{}], 已下载{}, 总共{}, 平均速度{}    ".format(
+            "#" * done, " " * (40-done),
+            storage(current_size), storage(vid_size),
+            storage_unit(speed)), end="\r")
+
+
 def download(file_name, desc, stream_url, vid_size):
     """下载器"""
     os.system("cls")
-    print(file_name)
     # 初始化
     url = stream_url
     current_size = 0
@@ -149,10 +186,10 @@ def download(file_name, desc, stream_url, vid_size):
                     f.flush()
 
                     speed = (1024 * total) / \
-                        math.ceil(time.time() - start_time + 0.001)
+                        (math.ceil(time.time() - start_time + 0.001))
                     done = int(math.ceil(20 * current_size / vid_size))
                     # 进度条
-                    print("[{}{}], 已下载{}, 总共{}, 速度{}    ".format(
+                    print("[{}{}], 已下载{}, 总共{}, 平均速度{}    ".format(
                         "#" * done, " " * (20-done),
                         storage(current_size), storage(vid_size),
                         storage_unit(speed)), end="\r")
@@ -162,6 +199,16 @@ def download(file_name, desc, stream_url, vid_size):
     # 重置请求头
     if flag:
         settings.HEADERS.pop("Range")
+
+
+def t_download(file_name, stream_url):
+    os.system("cls")
+    video_dw = requests.get(
+        url=stream_url, headers=settings.HEADERS, stream=True)
+    with open(file_name, "wb") as f:
+        for chunk in video_dw.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
 
 
 class Movie(object):
@@ -190,7 +237,7 @@ class Movie(object):
         vid_name, desc = resolver(3, resp.json())
         return [avid, cvid, vid_name, desc]
 
-    def get_movie(self, avid, cvid, qn):
+    def get_movie(self, avid, cvid, qn, is_t=False):
         # 获取视频流地址
         url = "https://api.bilibili.com/pgc/player/web/playurl"
         params = {
@@ -201,7 +248,15 @@ class Movie(object):
         resp = requests.get(url=url, headers=settings.HEADERS, params=params)
         self.stream_url = resp.json()["result"]["durl"][0]["url"]
         self.vid_size = resp.json()["result"]["durl"][0]["size"]
-        download(self.file_name, self.desc, self.stream_url, self.vid_size)
+        vids_sizes.append(self.vid_size)
+        if is_t:
+            t = Thread(target=t_download, args=(
+                self.file_name, self.stream_url))
+            t.start()
+            t_lis.append(t)
+        else:
+            download(self.file_name, self.desc, self.stream_url, self.vid_size)
+        
 
     def start(self):
         self.vid_url = resolver(1, self.vid_url)
@@ -227,8 +282,6 @@ class Drama(Movie):
         season_id = self.vid_url.rsplit("ss", 1)[1]
         resp = requests.get(url=url, headers=settings.HEADERS,
                             params={"season_id": season_id})
-        with open("a.json","w", encoding="utf8") as f:
-            f.write(resp.text)
         self.vid_list, self.desc, self.dir_name = resolver(7, resp.json())
 
     def ruleToDownload(self):
@@ -261,11 +314,16 @@ class Drama(Movie):
 
     def loop(self):
         qn = get_qn()
+        vid_num = len(self.vid_list)
+        # 开启进度条线程
+        pb = Thread(target=bar, args=(self.dir_name, self.desc, vid_num))
+        pb.start()
+        t_lis.append(pb)
         for part in self.vid_list:
             self.file_name = os.path.join(
                 settings.DownloadDefaultPath, self.dir_name, f"{part[2]}-{definition[qn]}.flv")
             self.file_name = resolver(4, self.file_name)
-            self.get_movie(part[0], part[1], qn)
+            self.get_movie(part[0], part[1], qn, is_t=True)
 
     def start(self):
         self.vid_url = resolver(8, self.vid_url)
@@ -306,7 +364,7 @@ class Video(object):
             vid_name, desc = resolver(3, resp.json())
             return (vid_name, desc, resp.json()["data"]["videos"])
 
-    def get_vid(self, qn):
+    def get_vid(self, qn, is_t=False):
         url = "http://api.bilibili.com/x/player/playurl"
         resp = requests.get(url=url, headers=settings.HEADERS, params={
             "bvid": self.bvid,
@@ -315,7 +373,14 @@ class Video(object):
         })
         self.stream_url = resp.json()["data"]["durl"][0]["url"]
         self.vid_size = resp.json()["data"]["durl"][0]["size"]
-        download(self.file_name, self.desc, self.stream_url, self.vid_size)
+        vids_sizes.append(self.vid_size)
+        if is_t:
+            t = Thread(target=t_download, args=(
+                self.file_name, self.stream_url))
+            t.start()
+            t_lis.append(t)
+        else:
+            download(self.file_name, self.desc, self.stream_url, self.vid_size)
 
     def start(self):
         self.bvid = resolver(5, self.vid_url)
@@ -339,12 +404,18 @@ class ListVideo(Video):
     def loop(self):
         qn_key = get_qn()
         qn = definition[qn_key]
+        vid_num = len(self.vid_list)
+        # 开启进度条线程
+        pb = Thread(target=bar, args=(self.dir_name, self.desc, vid_num))
+        pb.start()
+        t_lis.append(pb)
+        # 循环下载视频
         for part in self.vid_list:
             self.file_name = os.path.join(
                 settings.DownloadDefaultPath, self.dir_name, f"{part[0]}-{qn}.flv")
             self.file_name = resolver(4, self.file_name)
             self.cid = part[1]
-            self.get_vid(qn_key)
+            self.get_vid(qn_key, is_t=True)
 
     def ruleToDownload(self):
         print("""
@@ -375,10 +446,10 @@ class ListVideo(Video):
             self.rule()
 
     def start(self):
-        self.bvid = resolver(5, self.vid_url)
+        self.bvid = resolver(5, self.vid_url)  # 　提取BV号
         self.dir_name, self.desc, self.vid_list = self.get_vid_info(2)
         # 创建专门存放该番剧的文件夹
-        self.dir_name = resolver(4, self.dir_name)
+        self.dir_name = resolver(4, self.dir_name)  # 除特殊字符
         path = os.path.join(settings.DownloadDefaultPath, self.dir_name)
         if not os.path.exists(path):
             os.mkdir(path)

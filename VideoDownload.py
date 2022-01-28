@@ -7,7 +7,7 @@ from threading import Thread
 
 import settings
 
-#清晰度字典
+# 清晰度字典
 definition = {
     127: '8K超高清',
     126: '杜比视界',
@@ -49,6 +49,7 @@ def resolver(request, string):
         string = string.replace("。", "")
         string = string.replace("/", "")
         string = string.replace("|", "")
+        string = string.replace("?", "")
         return string
     elif request == 5:
         # 提取BV号
@@ -70,6 +71,10 @@ def resolver(request, string):
     elif request == 8:
         # 番剧网址去参数
         return string.rsplit("?", 1)[0]
+    elif request == 9:
+        # 解析用户的mid
+        string = string.rsplit("/", 2)[-2]
+        return string
 
 
 def get_qn():
@@ -89,6 +94,7 @@ def get_qn():
     16: '320P流畅'
     """)
     return int(input("请输入清晰度(键):"))
+
 
 
 def storage_unit(Byte):
@@ -121,7 +127,7 @@ def storage(Byte):
         return "%.2fGB" % GB
 
 
-def bar(dir_name, desc, vid_num):
+def bar(dir_name, desc, vid_num, up_name=""):
     while True:
         print(f"正在生成线程中...已生成{len(vids_sizes)}/{vid_num}个线程...", end="\r")
         if vid_num == len(vids_sizes):
@@ -133,13 +139,13 @@ def bar(dir_name, desc, vid_num):
     # 初始化
     start_time = time.time()
     current_size = 0
-    file_name = os.path.join(settings.DownloadDefaultPath, dir_name)
+    file_name = os.path.join(settings.DownloadDefaultPath, up_name, dir_name)
 
     # 进度条
     while True:
         current_size = 0
         # 获取信息
-        for root, folder, files in os.walk(file_name):
+        for root, _, files in os.walk(file_name):
             current_size += sum([os.path.getsize(os.path.join(root, file))
                                 for file in files])
         speed = math.ceil(current_size / (time.time() - start_time + 0.001))
@@ -256,7 +262,6 @@ class Movie(object):
             t_lis.append(t)
         else:
             download(self.file_name, self.desc, self.stream_url, self.vid_size)
-        
 
     def start(self):
         self.vid_url = resolver(1, self.vid_url)
@@ -401,23 +406,27 @@ class ListVideo(Video):
         self.vid_list = None
         super().__init__(vid_url)
 
-    def loop(self):
-        qn_key = get_qn()
+    def loop(self, qn_key, up_name=""):
         qn = definition[qn_key]
         vid_num = len(self.vid_list)
         # 开启进度条线程
-        pb = Thread(target=bar, args=(self.dir_name, self.desc, vid_num))
+        if up_name is not None:
+            pb = Thread(target=bar, args=(self.dir_name, self.desc, vid_num, up_name))
+        else:
+            pb = Thread(target=bar, args=(self.dir_name, self.desc, vid_num))
         pb.start()
         t_lis.append(pb)
         # 循环下载视频
         for part in self.vid_list:
             self.file_name = os.path.join(
-                settings.DownloadDefaultPath, self.dir_name, f"{part[0]}-{qn}.flv")
+                settings.DownloadDefaultPath, up_name, self.dir_name, f"{part[0]}-{qn}.flv")
             self.file_name = resolver(4, self.file_name)
             self.cid = part[1]
             self.get_vid(qn_key, is_t=True)
 
-    def ruleToDownload(self):
+    def ruleToDownload(self, is_l=False):
+        if is_l:
+            return
         print("""
         下载集数规则:
         1-5   表示下载1到5集
@@ -448,13 +457,92 @@ class ListVideo(Video):
     def start(self):
         self.bvid = resolver(5, self.vid_url)  # 　提取BV号
         self.dir_name, self.desc, self.vid_list = self.get_vid_info(2)
-        # 创建专门存放该番剧的文件夹
+        # 创建专门存放该分p视频的文件夹
         self.dir_name = resolver(4, self.dir_name)  # 除特殊字符
         path = os.path.join(settings.DownloadDefaultPath, self.dir_name)
         if not os.path.exists(path):
             os.mkdir(path)
         self.ruleToDownload()
-        self.loop()
+        # 获取清晰度
+        qn_key = get_qn()
+        self.loop(qn_key)
+
+
+class Up(ListVideo):
+    def __init__(self, space_url):
+        self.space_url = space_url
+        self.mid = None
+        self.vid_count = 0
+        self.key = None
+        self.cid = None
+        self.up_name = ""
+
+
+    def  get_space_name(self):
+        # 获取该空间的用户名
+        url = "http://api.bilibili.com/x/space/acc/info"
+        resp = requests.get(url, headers=settings.HEADERS, params={"mid":self.mid})
+        self.up_name = resp.json()["data"]["name"]
+
+
+    def get_key_word(self):
+        # 获取用户想查询的关键字
+        os.system("cls")
+        self.key = input("请输入要查询的up的视频(不查询则回车):")
+
+    def get_vids(self):
+        # 查询用户投稿视频明细
+        url = f"http://api.bilibili.com/x/space/arc/search"
+        resp = requests.get(url, headers=settings.HEADERS,
+                            params={"mid": self.mid, "ps": 1, "pn": 1})
+        # 获取用户投稿的视频数目
+        self.vid_count = resp.json()["data"]["page"]["count"]
+        # 再次发送请求，保证获取所有视频
+        resp = requests.get(url, headers=settings.HEADERS,
+                            params={"mid": self.mid, 
+                            "ps": self.vid_count, 
+                            "pn": 1,
+                            "keyword" : self.key
+                            })
+        with open("a.json", "w", encoding="utf8") as f:
+            f.write(resp.text)
+        # 获取所有视频的bvid号
+        bvid_list = [vid["bvid"] for vid in resp.json()["data"]["list"]["vlist"]]
+        # 获取用户想要的清晰度
+        qn = get_qn()
+        for bvid in bvid_list:
+            self.bvid = bvid
+            self.dir_name, self.desc, self.vid_list = self.get_vid_info(2)
+            if len(self.vid_list) == 1:
+                # 调用Video类方法，直接下载单个视频
+                vid_name, self.desc = self.get_vid_info(1)
+                vid_name = resolver(4, string=vid_name)
+                self.file_name = os.path.join(
+                    settings.DownloadDefaultPath, self.up_name, f"{vid_name}-{qn}.flv")
+                self.get_vid(qn)
+            else:
+                # 调用List_Video类方法，直接下载分p视频
+                self.dir_name, self.desc, self.vid_list = self.get_vid_info(2)
+                # 创建专门存放该分p视频的文件夹
+                self.dir_name = resolver(4, self.dir_name)  # 除特殊字符
+                path = os.path.join(settings.DownloadDefaultPath, self.up_name, self.dir_name)
+                if not os.path.exists(path):
+                    os.mkdir(path)
+                self.loop(qn, self.up_name)
+                # 主进程等待子线程先全部走完，避免主进程和子线程的输出冲突
+                for t in t_lis:
+                    t.join()
+
+
+    def start(self):
+        self.mid = resolver(9, self.space_url)  # 解析用户的mid
+        self.get_space_name()  # 获取up的名称
+        # 创建专属该up的文件夹
+        if not os.path.exists(os.path.join(settings.DownloadDefaultPath, self.up_name)):
+            os.mkdir(os.path.join(settings.DownloadDefaultPath, self.up_name))
+        self.get_key_word()  # 获取关键字
+        self.get_vids()  # 获取视频
+
 
 
 def start():
@@ -465,16 +553,19 @@ def start():
     2.电影
     3.番剧
     4.分p视频(只要视频分P就要选这个)
+    5.up下的视频
     """)
     type = int(input("请输入视频类型:"))
-    vid_url = input("请输入网址:")
+    url = input("请输入网址:")
     if type == 1:
-        Video(vid_url).start()
+        Video(url).start()
     elif type == 2:
-        Movie(vid_url).start()
+        Movie(url).start()
     elif type == 3:
-        Drama(vid_url).start()
+        Drama(url).start()
     elif type == 4:
-        ListVideo(vid_url).start()
+        ListVideo(url).start()
+    elif type == 5:
+        Up(url).start()
     else:
         return

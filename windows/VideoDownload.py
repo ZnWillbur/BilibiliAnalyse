@@ -504,8 +504,6 @@ class Up(ListVideo):
                             "pn": 1,
                             "keyword" : self.key
                             })
-        with open("a.json", "w", encoding="utf8") as f:
-            f.write(resp.text)
         # 获取所有视频的bvid号
         bvid_list = [vid["bvid"] for vid in resp.json()["data"]["list"]["vlist"]]
         # 获取用户想要的清晰度

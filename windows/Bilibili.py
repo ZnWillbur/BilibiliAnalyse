@@ -2,6 +2,7 @@ import os
 import VideoDownload
 import settings
 from loggin import loggin
+import GetPeopleData
 
 def start():
     if input("请问是否需要登录?(1.登录;回车.不登录/使用上次登录)"):
@@ -20,6 +21,7 @@ def start():
 
     分析器有如下功能:
     1.下载视频
+    2.统计up主的信息
 
     注意事项:
     1.不可以使用系统代理
@@ -27,6 +29,8 @@ def start():
     flag = int(input("请输入选项:"))
     if flag == 1:
         VideoDownload.start()
+    elif flag == 2:
+        GetPeopleData.start()
 
 
 start()

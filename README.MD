@@ -5,6 +5,10 @@
 
 ## 使用方法
 - 拥有python环境
+- 安装依赖
+  ```
+  python InstallDepend.py
+  ```
 - 在文件夹中输入以下命令即可
   ```
   python Bilibili.py

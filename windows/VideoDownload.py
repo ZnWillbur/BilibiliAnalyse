@@ -53,7 +53,7 @@ def resolver(request, string):
         return string
     elif request == 5:
         # 提取BV号
-        return string.rsplit("?", 1)[0].rsplit("/", 1)[1]
+        return re.findall(r"(BV.*)\?", string)[0].strip("/")
     elif request == 6:
         # 获取多次cid
         vid_list = []
